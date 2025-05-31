@@ -73,7 +73,7 @@ def find_recipes_by_ingredients(ingredients: List[str], current_user_id: int) ->
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     placeholder = ",".join(["%s"] * len(ingredients))
-    sql = f"""SELECT r.id, r.title AS recipe_title, u.nickname AS author, MIN(rp.photo_url) AS recipe_photo,COUNT(t.id) AS testimonial_count FROM recipes r JOIN ingredients ing ON r.id = ing.recipe_id LEFT JOIN recipe_photos rp ON r.id = rp.recipe_id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN testimonials t ON r.id = t.recipe_id WHERE ing.name IN ({placeholder}) AND r.user_id != %s GROUP BY r.id ORDER BY RAND()"""
+    sql = f"""SELECT r.id, r.title, u.nickname, (SELECT rp.photo_url FROM recipe_photos rp WHERE rp.recipe_id = r.id LIMIT 1) AS recipe_photo,COUNT(t.id) AS testimonial_count FROM recipes r JOIN ingredients ing ON r.id = ing.recipe_id LEFT JOIN recipe_photos rp ON r.id = rp.recipe_id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN testimonials t ON r.id = t.recipe_id WHERE ing.name IN ({placeholder}) AND r.user_id != %s GROUP BY r.id ORDER BY RAND()"""
     params = ingredients + [current_user_id]
     cursor.execute(sql, params)
     results = cursor.fetchall()
