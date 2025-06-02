@@ -1,31 +1,31 @@
 from fastapi import FastAPI, HTTPException, Form, Depends
 from pydantic import BaseModel
-from rapidfuzz import process
-import mysql.connector
 from typing import List
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import OAuth2PasswordBearer
 import os
+import mysql.connector
 import jwt
 from jwt import PyJWTError
-from fastapi.security import OAuth2PasswordBearer
+from dotenv import load_dotenv
+from rapidfuzz import process
+
+load_dotenv()
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="Public"), name="static")
 
-SECRET_KEY = os.getenv("JWT_SECRET", "iamsimpkita")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
+SECRET_KEY = os.getenv("JWT_SECRET")
+ALGORITHM = os.getenv("ALGORITHM")
 
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "db_resepkita"
+    "host": os.getenv("DB_HOST"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
+    "database": os.getenv("DB_NAME"),
 }
 
-class SearchRequest(BaseModel):
-    sentence: str
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
 
 class TokenData(BaseModel):
     user_id: int = None
@@ -34,7 +34,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> int:
     credentials_exception = HTTPException(
         status_code=401,
         detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"}
+        headers={"WWW-Authenticate": "Bearer"},
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -49,7 +49,7 @@ def get_connection():
     try:
         return mysql.connector.connect(**DB_CONFIG)
     except mysql.connector.Error as err:
-        raise HTTPException(500, f"Database connection error: {err}")
+        raise HTTPException(status_code=500, detail=f"Database connection error: {err}")
 
 def extract_ingredients(text: str, threshold: int = 78) -> List[str]:
     conn = get_connection()
@@ -73,8 +73,8 @@ def find_recipes_by_ingredients(ingredients: List[str], current_user_id: int) ->
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     placeholder = ",".join(["%s"] * len(ingredients))
-    sql = f"""SELECT r.id, r.title, u.nickname, (SELECT rp.photo_url FROM recipe_photos rp WHERE rp.recipe_id = r.id LIMIT 1) AS recipe_photo,COUNT(t.id) AS testimonial_count FROM recipes r JOIN ingredients ing ON r.id = ing.recipe_id LEFT JOIN recipe_photos rp ON r.id = rp.recipe_id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN testimonials t ON r.id = t.recipe_id WHERE ing.name IN ({placeholder}) AND r.user_id != %s GROUP BY r.id ORDER BY RAND()"""
-    params = ingredients + [current_user_id]
+    sql = f"""SELECT r.id, r.title, u.nickname, (SELECT rp.photo_url FROM recipe_photos rp WHERE rp.recipe_id = r.id LIMIT 1) AS recipe_photo, COUNT(t.id) AS testimonial_count FROM recipes r JOIN ingredients ing ON r.id = ing.recipe_id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN testimonials t ON r.id = t.recipe_id WHERE ing.name IN ({placeholder}) AND r.user_id != %s AND r.status = 'approved' AND r.id NOT IN ( SELECT recipe_id FROM favorites WHERE user_id = %s) GROUP BY r.id ORDER BY RAND()"""
+    params = ingredients + [current_user_id, current_user_id]
     cursor.execute(sql, params)
     results = cursor.fetchall()
     cursor.close()
@@ -82,13 +82,16 @@ def find_recipes_by_ingredients(ingredients: List[str], current_user_id: int) ->
     return results
 
 @app.post("/API/user/searching_recipe_ai")
-def search_recipes_ai(sentence: str = Form(...), current_user_id: int = Depends(get_current_user)):
+def search_recipes_ai(
+    sentence: str = Form(...),
+    current_user_id: int = Depends(get_current_user)
+):
     recognized = extract_ingredients(sentence)
     if not recognized:
         return {
             "message": "Mohon Maaf, bahan yang anda miliki belum memiliki resep :(",
             "image_url": "/static/Fuuka.png"
-            }
+        }
     recipes = find_recipes_by_ingredients(recognized, current_user_id)
     return {
         "recognized_ingredients": recognized,
