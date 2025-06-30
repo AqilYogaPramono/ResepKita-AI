@@ -9,6 +9,7 @@ import jwt
 from jwt import PyJWTError
 from dotenv import load_dotenv
 from rapidfuzz import process
+import uvicorn
 
 load_dotenv()
 
@@ -97,3 +98,6 @@ def search_recipes_ai(
         "recognized_ingredients": recognized,
         "recipes": recipes
     }
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
