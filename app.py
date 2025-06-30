@@ -9,6 +9,7 @@ import jwt
 from jwt import PyJWTError
 from dotenv import load_dotenv
 from rapidfuzz import process
+import uvicorn
 
 load_dotenv()
 
@@ -73,8 +74,8 @@ def find_recipes_by_ingredients(ingredients: List[str], current_user_id: int) ->
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     placeholder = ",".join(["%s"] * len(ingredients))
-    sql = f"""SELECT r.id, r.title, u.nickname, (SELECT rp.photo_url FROM recipe_photos rp WHERE rp.recipe_id = r.id LIMIT 1) AS recipe_photo, COUNT(t.id) AS testimonial_count FROM recipes r JOIN ingredients ing ON r.id = ing.recipe_id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN testimonials t ON r.id = t.recipe_id WHERE ing.name IN ({placeholder}) AND r.user_id != %s AND r.status = 'approved' AND r.id NOT IN ( SELECT recipe_id FROM favorites WHERE user_id = %s) GROUP BY r.id ORDER BY RAND()"""
-    params = ingredients + [current_user_id, current_user_id]
+    sql = f"""SELECT r.id, r.title, r.user_id AS creator_id, u.nickname, u.photo_profile, (SELECT rp.photo_url FROM recipe_photos rp WHERE rp.recipe_id = r.id LIMIT 1) AS recipe_photo, COUNT(t.id) AS testimonial_count, CASE WHEN f.user_id IS NOT NULL THEN 'TRUE' ELSE 'FALSE' END AS is_saved FROM recipes r JOIN ingredients ing ON r.id = ing.recipe_id LEFT JOIN users u ON r.user_id = u.id LEFT JOIN testimonials t ON r.id = t.recipe_id LEFT JOIN favorites f ON r.id = f.recipe_id AND f.user_id = %s WHERE ing.name IN ({placeholder}) AND r.user_id != %s AND r.status = 'approved' AND r.id NOT IN (SELECT recipe_id FROM favorites WHERE user_id = %s) GROUP BY r.id ORDER BY RAND()"""
+    params = [current_user_id] + ingredients + [current_user_id, current_user_id]
     cursor.execute(sql, params)
     results = cursor.fetchall()
     cursor.close()
@@ -97,3 +98,6 @@ def search_recipes_ai(
         "recognized_ingredients": recognized,
         "recipes": recipes
     }
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
