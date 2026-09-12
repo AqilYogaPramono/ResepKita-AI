@@ -5,3 +5,4 @@ rapidfuzz
 python-dotenv
 PyJWT
 aiomysql
+a2wsgi
