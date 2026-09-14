@@ -12,8 +12,7 @@ async def lifespan(app: FastAPI):
     await close_db_pool()
 
 app = FastAPI(
-    title="ResepKita AI Service",
-    description="API Service untuk pencarian resep berbasis kecerdasan ekstraksi bahan makanan.",
+    title="ResepKita AI",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -24,7 +23,7 @@ if os.path.exists(public_dir):
 
 app.include_router(recipe_ai_router)
 
-@app.get("/", tags=["Health Check"])
+@app.get("/")
 async def root():
     return {"status": "ok"}
 
