@@ -13,8 +13,9 @@ async def init_db_pool():
             user=settings.DB_USER,
             password=settings.DB_PASSWORD,
             db=settings.DB_NAME,
-            minsize=settings.DB_MIN_POOL,
-            maxsize=settings.DB_MAX_POOL,
+            minsize=1,
+            maxsize=5,
+            pool_recycle=30,
             autocommit=True
         )
     except aiomysql.MySQLError as err:
